@@ -1,0 +1,22 @@
+{
+  "type": "record",
+  "name": "Order",
+  "namespace": "com.assignment.orders",
+  "fields": [
+    {
+      "name": "orderId",
+      "type": "string",
+      "doc": "Unique identifier for the order"
+    },
+    {
+      "name": "product",
+      "type": "string",
+      "doc": "Name of the purchased item"
+    },
+    {
+      "name": "price",
+      "type": "float",
+      "doc": "Price of the product"
+    }
+  ]
+}

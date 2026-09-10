@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Kafka Order Dashboard</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body { background: #0a0f1e; font-family: 'Segoe UI', system-ui, sans-serif; }
+    .glass { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); backdrop-filter: blur(12px); }
+    .stat-value { transition: all 0.4s cubic-bezier(0.4,0,0.2,1); }
+    @keyframes slideIn { from { opacity:0; transform:translateY(-8px); } to { opacity:1; transform:translateY(0); } }
+    @keyframes pulse-ring { 0%,100%{opacity:1;} 50%{opacity:0.3;} }
+    .pulse { animation: pulse-ring 2s infinite; }
+    .row-in { animation: slideIn 0.35s ease forwards; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.15); border-radius:4px; }
+  </style>
+</head>
+<body class="text-gray-100 min-h-screen p-5">
+
+  <!-- Header -->
+  <div class="flex items-center justify-between mb-6">
+    <div>
+      <h1 class="text-2xl font-bold tracking-tight text-white">Kafka Order Dashboard</h1>
+      <p class="text-sm text-gray-500 mt-0.5">Real-time stream · Avro serialization · Retry &amp; DLQ</p>
+    </div>
+    <div id="status-badge" class="flex items-center gap-2 glass rounded-full px-4 py-2 text-sm">
+      <span id="status-dot" class="w-2 h-2 rounded-full bg-yellow-400 pulse"></span>
+      <span id="status-text" class="font-medium text-gray-300">Connecting…</span>
+    </div>
+  </div>
+
+  <!-- Stat Cards -->
+  <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-5">
+    <div class="glass rounded-2xl p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-widest">Orders</p>
+      <p class="text-3xl font-bold text-white mt-1 stat-value" id="s-count">0</p>
+    </div>
+    <div class="glass rounded-2xl p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-widest">Avg Price</p>
+      <p class="text-3xl font-bold text-blue-400 mt-1 stat-value" id="s-avg">$0</p>
+    </div>
+    <div class="glass rounded-2xl p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-widest">Min Price</p>
+      <p class="text-3xl font-bold text-emerald-400 mt-1 stat-value" id="s-min">—</p>
+    </div>
+    <div class="glass rounded-2xl p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-widest">Max Price</p>
+      <p class="text-3xl font-bold text-orange-400 mt-1 stat-value" id="s-max">—</p>
+    </div>
+    <div class="glass rounded-2xl p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-widest">Retries</p>
+      <p class="text-3xl font-bold text-yellow-400 mt-1 stat-value" id="s-retry">0</p>
+    </div>
+    <div class="glass rounded-2xl p-4">
+      <p class="text-xs text-gray-500 uppercase tracking-widest">DLQ</p>
+      <p class="text-3xl font-bold text-red-400 mt-1 stat-value" id="s-dlq">0</p>
+    </div>
+  </div>
+
+  <!-- Charts Row -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-5">
+    <div class="lg:col-span-2 glass rounded-2xl p-5">
+      <p class="text-xs text-gray-500 uppercase tracking-widest mb-4">Running Average vs Order Price</p>
+      <div style="height:220px"><canvas id="avgChart"></canvas></div>
+    </div>
+    <div class="glass rounded-2xl p-5">
+      <p class="text-xs text-gray-500 uppercase tracking-widest mb-4">Orders by Product</p>
+      <div style="height:220px"><canvas id="productChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- Bottom Row -->
+  <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
+    <!-- Orders Table -->
+    <div class="lg:col-span-2 glass rounded-2xl p-5">
+      <p class="text-xs text-gray-500 uppercase tracking-widest mb-4">Recent Orders</p>
+      <div class="overflow-x-auto">
+        <table class="w-full text-sm">
+          <thead>
+            <tr class="text-gray-600 text-xs uppercase border-b border-white/5">
+              <th class="pb-3 text-left font-medium">Order ID</th>
+              <th class="pb-3 text-left font-medium">Product</th>
+              <th class="pb-3 text-right font-medium">Price</th>
+              <th class="pb-3 text-right font-medium">Avg at time</th>
+              <th class="pb-3 text-right font-medium">Status</th>
+            </tr>
+          </thead>
+          <tbody id="orders-body"></tbody>
+        </table>
+        <p id="no-orders" class="text-center text-gray-600 text-sm py-8">Waiting for orders…</p>
+      </div>
+    </div>
+
+    <!-- Event Log -->
+    <div class="glass rounded-2xl p-5 flex flex-col">
+      <p class="text-xs text-gray-500 uppercase tracking-widest mb-4">Event Log</p>
+      <div id="event-log" class="flex-1 overflow-y-auto space-y-1.5" style="max-height:280px"></div>
+      <p id="no-events" class="text-center text-gray-600 text-sm py-6">No events yet…</p>
+    </div>
+  </div>
+
+<script>
+const MAX_CHART = 40;
+const MAX_ROWS  = 12;
+const MAX_LOG   = 30;
+
+// ── Socket ──────────────────────────────────────────────
+const socket = io();
+socket.on('connect', () => {
+  setStatus('green', 'Connected');
+});
+socket.on('disconnect', () => {
+  setStatus('red', 'Disconnected');
+});
+
+function setStatus(color, text) {
+  const dot = document.getElementById('status-dot');
+  dot.className = `w-2 h-2 rounded-full bg-${color}-400` + (color === 'green' ? ' pulse' : '');
+  document.getElementById('status-text').textContent = text;
+}
+
+// ── Running-avg Chart ────────────────────────────────────
+const avgCtx = document.getElementById('avgChart').getContext('2d');
+const avgChart = new Chart(avgCtx, {
+  type: 'line',
+  data: {
+    labels: [],
+    datasets: [
+      {
+        label: 'Running Avg',
+        data: [],
+        borderColor: '#60a5fa',
+        backgroundColor: 'rgba(96,165,250,0.12)',
+        borderWidth: 2,
+        fill: true,
+        tension: 0.45,
+        pointRadius: 2,
+      },
+      {
+        label: 'Order Price',
+        data: [],
+        borderColor: 'rgba(251,191,36,0.55)',
+        backgroundColor: 'transparent',
+        borderWidth: 1.5,
+        borderDash: [5,4],
+        fill: false,
+        tension: 0,
+        pointRadius: 2.5,
+        pointBackgroundColor: '#fbbf24',
+      },
+    ],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 200 },
+    plugins: {
+      legend: { labels: { color: '#6b7280', font: { size: 11 }, boxWidth: 14 } },
+    },
+    scales: {
+      x: {
+        ticks: { color: '#4b5563', maxTicksLimit: 8, font: { size: 10 } },
+        grid:  { color: 'rgba(255,255,255,0.04)' },
+      },
+      y: {
+        ticks: { color: '#4b5563', callback: v => '$' + v.toFixed(0), font: { size: 10 } },
+        grid:  { color: 'rgba(255,255,255,0.04)' },
+      },
+    },
+  },
+});
+
+// ── Product Doughnut ─────────────────────────────────────
+const PRODUCTS    = ['Item1','Item2','Item3','Item4','Item5'];
+const PROD_COUNTS = Object.fromEntries(PRODUCTS.map(p => [p, 0]));
+const COLORS      = ['#60a5fa','#34d399','#fbbf24','#f87171','#a78bfa'];
+
+const prodCtx = document.getElementById('productChart').getContext('2d');
+const prodChart = new Chart(prodCtx, {
+  type: 'doughnut',
+  data: {
+    labels: PRODUCTS,
+    datasets: [{ data: PRODUCTS.map(() => 0), backgroundColor: COLORS, borderWidth: 0, hoverOffset: 6 }],
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false,
+    animation: { duration: 300 },
+    plugins: {
+      legend: {
+        position: 'bottom',
+        labels: { color: '#6b7280', font: { size: 11 }, padding: 12, boxWidth: 12 },
+      },
+    },
+    cutout: '65%',
+  },
+});
+
+// ── Helpers ──────────────────────────────────────────────
+function $(id) { return document.getElementById(id); }
+
+function addLog(type, html) {
+  $('no-events').style.display = 'none';
+  const log = $('event-log');
+  const cfg = {
+    ok:    { icon: '✓', cls: 'text-emerald-400 bg-emerald-400/10 border-emerald-400/20' },
+    retry: { icon: '↺', cls: 'text-yellow-400  bg-yellow-400/10  border-yellow-400/20'  },
+    dlq:   { icon: '✗', cls: 'text-red-400     bg-red-400/10     border-red-400/20'     },
+  }[type];
+  const div = document.createElement('div');
+  div.className = `row-in flex items-start gap-2 text-xs rounded-lg px-3 py-2 border ${cfg.cls}`;
+  div.innerHTML = `<span class="font-bold mt-0.5">${cfg.icon}</span><span class="text-gray-300 leading-relaxed">${html}</span>`;
+  log.insertBefore(div, log.firstChild);
+  while (log.children.length > MAX_LOG) log.removeChild(log.lastChild);
+}
+
+function pushChart(orderId, price, avg) {
+  if (avgChart.data.labels.length >= MAX_CHART) {
+    avgChart.data.labels.shift();
+    avgChart.data.datasets[0].data.shift();
+    avgChart.data.datasets[1].data.shift();
+  }
+  avgChart.data.labels.push('#' + orderId);
+  avgChart.data.datasets[0].data.push(avg);
+  avgChart.data.datasets[1].data.push(price);
+  avgChart.update('none');
+}
+
+// ── Socket Events ────────────────────────────────────────
+socket.on('new_order', d => {
+  // Stats
+  $('s-count').textContent  = d.count;
+  $('s-avg').textContent    = '$' + d.avg.toFixed(2);
+  $('s-min').textContent    = '$' + d.min.toFixed(2);
+  $('s-max').textContent    = '$' + d.max.toFixed(2);
+  $('s-retry').textContent  = d.retry_count;
+  $('s-dlq').textContent    = d.dlq_count;
+
+  // Chart
+  pushChart(d.orderId, d.price, d.avg);
+
+  // Product donut
+  if (PROD_COUNTS[d.product] !== undefined) {
+    PROD_COUNTS[d.product]++;
+    prodChart.data.datasets[0].data = PRODUCTS.map(p => PROD_COUNTS[p]);
+    prodChart.update('none');
+  }
+
+  // Table
+  $('no-orders').style.display = 'none';
+  const tbody = $('orders-body');
+  const tr = document.createElement('tr');
+  tr.className = 'row-in border-b border-white/5 hover:bg-white/[0.03] transition-colors';
+  tr.innerHTML = `
+    <td class="py-2.5 font-mono text-gray-300">#${d.orderId}</td>
+    <td class="py-2.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium bg-blue-500/20 text-blue-300">${d.product}</span></td>
+    <td class="py-2.5 text-right font-semibold text-white">$${d.price.toFixed(2)}</td>
+    <td class="py-2.5 text-right text-blue-400">$${d.avg.toFixed(2)}</td>
+    <td class="py-2.5 text-right"><span class="px-2 py-0.5 rounded-full text-xs bg-emerald-500/20 text-emerald-300">OK</span></td>
+  `;
+  tbody.insertBefore(tr, tbody.firstChild);
+  while (tbody.children.length > MAX_ROWS) tbody.removeChild(tbody.lastChild);
+
+  addLog('ok', `Order <b>#${d.orderId}</b> · ${d.product} · <b>$${d.price.toFixed(2)}</b>`);
+});
+
+socket.on('retry_event', d => {
+  $('s-retry').textContent = d.total;
+  addLog('retry', `Retry <b>${d.attempt}/${d.max}</b> — ${d.reason} (wait ${d.wait}s)`);
+});
+
+socket.on('dlq_event', d => {
+  $('s-dlq').textContent = d.count;
+  addLog('dlq', `DLQ #<b>${d.count}</b> — ${d.reason}`);
+});
+</script>
+</body>
+</html>

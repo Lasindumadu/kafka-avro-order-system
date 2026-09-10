@@ -1,6 +1,7 @@
 """
 Kafka Order Producer
-Produces order messages serialized with Avro (schema embedded locally).
+- 95% normal orders with randomized prices
+- 5% intentionally invalid orders (price=0) to exercise retry/DLQ path
 """
 
 import io
@@ -34,8 +35,17 @@ def serialize(record: dict) -> bytes:
 def delivery_report(err, msg):
     if err:
         print(f"[Producer] Delivery FAILED: {err}")
-    else:
-        print(f"[Producer] Delivered → partition={msg.partition()}, offset={msg.offset()}")
+
+
+def make_order(order_id: int) -> dict:
+    # 5% chance of an invalid order (price=0) to demonstrate retry + DLQ
+    if random.random() < 0.05:
+        return {"orderId": str(order_id), "product": random.choice(PRODUCTS), "price": 0.0}
+    return {
+        "orderId": str(order_id),
+        "product": random.choice(PRODUCTS),
+        "price":   round(random.uniform(10.0, 500.0), 2),
+    }
 
 
 def main():
@@ -45,11 +55,7 @@ def main():
     print(f"[Producer] Publishing to '{TOPIC}'. Press Ctrl+C to stop.\n")
     try:
         while True:
-            order = {
-                "orderId": str(order_id),
-                "product": random.choice(PRODUCTS),
-                "price":   round(random.uniform(5.0, 500.0), 2),
-            }
+            order = make_order(order_id)
             producer.produce(
                 topic=TOPIC,
                 value=serialize(order),
@@ -57,7 +63,8 @@ def main():
                 callback=delivery_report,
             )
             producer.poll(0)
-            print(f"[Producer] Sent → orderId={order['orderId']}, product={order['product']}, price=${order['price']:.2f}")
+            tag = " [INVALID]" if order["price"] == 0.0 else ""
+            print(f"[Producer] Sent → orderId={order['orderId']}, product={order['product']}, price=${order['price']:.2f}{tag}")
             order_id += 1
             time.sleep(1)
     except KeyboardInterrupt:

@@ -1,9 +1,9 @@
 """
-Kafka Order Consumer
-- Deserializes Avro messages from 'orders' topic
-- Maintains real-time running average of prices
-- Retries transient failures (up to MAX_RETRIES) with exponential back-off
-- Sends permanently failed messages to a Dead Letter Queue (DLQ) topic
+Kafka Order Consumer (standalone CLI version)
+- Validates orders: price must be > 0
+- Retries invalid orders up to MAX_RETRIES with exponential back-off
+- Permanently failed messages go to Dead Letter Queue (DLQ)
+- Maintains real-time running average of valid order prices
 """
 
 import io
@@ -17,7 +17,7 @@ TOPIC         = "orders"
 DLQ_TOPIC     = "orders.dlq"
 GROUP_ID      = "order-consumer-group"
 MAX_RETRIES   = 3
-BASE_BACKOFF  = 2   # seconds; doubles each retry (2 → 4 → 8)
+BASE_BACKOFF  = 2
 
 AVRO_SCHEMA = fastavro.parse_schema({
     "type": "record",
@@ -35,6 +35,17 @@ def deserialize(raw: bytes) -> dict:
     return fastavro.schemaless_reader(io.BytesIO(raw), AVRO_SCHEMA)
 
 
+def validate(order: dict):
+    """Raise ValueError for orders that cannot be processed."""
+    if order["price"] <= 0:
+        raise ValueError(f"Invalid price {order['price']} for order {order['orderId']}")
+
+def simulate_processing(order: dict):
+    """Simulate a downstream service call with ~15% transient failure rate."""
+    if random.random() < 0.15:
+        raise RuntimeError("Transient processing error (downstream service unavailable)")
+
+
 def send_to_dlq(dlq_producer: Producer, raw: bytes, reason: str):
     dlq_producer.produce(
         topic=DLQ_TOPIC,
@@ -43,12 +54,6 @@ def send_to_dlq(dlq_producer: Producer, raw: bytes, reason: str):
     )
     dlq_producer.poll(0)
     print(f"  [DLQ] Forwarded to '{DLQ_TOPIC}' — reason: {reason}")
-
-
-def process_order(order: dict):
-    """Simulate ~20% transient failure rate for demo purposes."""
-    if random.random() < 0.20:
-        raise RuntimeError("Simulated transient processing error")
 
 
 class RunningAverage:
@@ -67,10 +72,9 @@ def main():
         "bootstrap.servers": KAFKA_BROKER,
         "group.id": GROUP_ID,
         "auto.offset.reset": "earliest",
-        "enable.auto.commit": False,    # commit manually after processing
+        "enable.auto.commit": False,
     })
     consumer.subscribe([TOPIC])
-
     dlq_producer = Producer({"bootstrap.servers": KAFKA_BROKER})
     avg = RunningAverage()
 
@@ -92,7 +96,8 @@ def main():
             for attempt in range(1, MAX_RETRIES + 1):
                 try:
                     order = deserialize(raw)
-                    process_order(order)
+                    validate(order)
+                    simulate_processing(order)
 
                     current_avg = avg.update(order["price"])
                     print(
@@ -105,16 +110,17 @@ def main():
                     success = True
                     break
 
-                except RuntimeError as e:
+                except (ValueError, RuntimeError) as e:
+                    # Retryable: validation failure or transient downstream error
                     wait = BASE_BACKOFF * (2 ** (attempt - 1))
                     print(f"  [Retry {attempt}/{MAX_RETRIES}] {e} — waiting {wait}s...")
                     time.sleep(wait)
 
                 except Exception as e:
-                    # Non-retryable (e.g. bad Avro bytes) — go straight to DLQ
+                    # Deserialization or unexpected error — non-retryable
                     print(f"  [Error] Non-retryable: {e}")
                     send_to_dlq(dlq_producer, raw, str(e))
-                    success = True  # treated as handled
+                    success = True
                     break
 
             if not success:

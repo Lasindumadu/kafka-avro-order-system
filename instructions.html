@@ -1,0 +1,804 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Kafka Order System — Setup & Run Guide</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Times New Roman', Times, serif;
+      font-size: 13pt;
+      color: #111;
+      background: #fff;
+      line-height: 1.75;
+    }
+
+    /* ── Cover Page ── */
+    .cover {
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      background: linear-gradient(135deg, #0f172a 0%, #1e3a5f 60%, #0ea5e9 100%);
+      color: #fff;
+      padding: 60px 40px;
+      page-break-after: always;
+    }
+    .cover .badge {
+      display: inline-block;
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 4px;
+      padding: 6px 18px;
+      font-size: 11pt;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      font-family: Arial, sans-serif;
+      margin-bottom: 28px;
+    }
+    .cover h1 {
+      font-size: 34pt;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      letter-spacing: 0;
+      margin-bottom: 14px;
+      line-height: 1.2;
+    }
+    .cover h1 span { color: #90cdf4; }
+    .cover .subtitle {
+      font-size: 13pt;
+      font-family: 'Times New Roman', serif;
+      color: rgba(255,255,255,0.72);
+      max-width: 520px;
+      margin: 0 auto 46px;
+    }
+    .cover-meta {
+      display: flex;
+      gap: 40px;
+      margin-top: 20px;
+      flex-wrap: wrap;
+      justify-content: center;
+    }
+    .cover-meta div {
+      text-align: center;
+    }
+    .cover-meta .label {
+      font-size: 10pt;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-family: Arial, sans-serif;
+      color: rgba(255,255,255,0.5);
+      margin-bottom: 4px;
+    }
+    .cover-meta .value {
+      font-size: 12pt;
+      font-family: 'Times New Roman', serif;
+      font-weight: normal;
+      color: #fff;
+    }
+    .cover-pills {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      justify-content: center;
+      margin-top: 36px;
+    }
+    .cover-pills span {
+      background: rgba(255,255,255,0.08);
+      border: 1px solid rgba(255,255,255,0.18);
+      border-radius: 3px;
+      padding: 5px 13px;
+      font-size: 11pt;
+      font-family: Arial, sans-serif;
+      color: #bee3f8;
+    }
+
+    /* ── Content Pages ── */
+    .page {
+      padding: 48px 72px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* section break for print */
+    .page-break { page-break-before: always; }
+
+    /* ── Section Headers ── */
+    .section-label {
+      font-size: 10pt;
+      font-family: Arial, sans-serif;
+      font-weight: normal;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #2563eb;
+      margin-bottom: 4px;
+    }
+    h2 {
+      font-size: 18pt;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      color: #111;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1.5px solid #ccc;
+    }
+    h3 {
+      font-size: 13pt;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      color: #1a1a1a;
+      margin: 22px 0 9px;
+    }
+    h3.step {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    h3.step .num {
+      width: 26px;
+      height: 26px;
+      border-radius: 50%;
+      background: #1d4ed8;
+      color: #fff;
+      font-size: 11pt;
+      font-family: Arial, sans-serif;
+      font-weight: bold;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    p { margin-bottom: 10px; color: #222; }
+
+    /* ── Code Blocks ── */
+    pre {
+      background: #1e1e1e;
+      color: #d4d4d4;
+      border-radius: 4px;
+      padding: 14px 18px;
+      font-family: 'Consolas', 'Courier New', monospace;
+      font-size: 11pt;
+      line-height: 1.65;
+      margin: 10px 0 16px;
+      overflow-x: auto;
+      border-left: 3px solid #3b82f6;
+    }
+    code {
+      background: #f0f0f0;
+      color: #b91c1c;
+      padding: 1px 5px;
+      border-radius: 3px;
+      font-family: 'Consolas', monospace;
+      font-size: 11pt;
+    }
+    pre code {
+      background: none;
+      color: inherit;
+      padding: 0;
+      font-size: 11pt;
+    }
+    .comment { color: #64748b; }
+    .cmd     { color: #38bdf8; }
+    .str     { color: #86efac; }
+    .kw      { color: #f9a8d4; }
+
+    /* ── Info Boxes ── */
+    .box {
+      border-radius: 3px;
+      padding: 12px 16px;
+      margin: 14px 0;
+      font-size: 12pt;
+      font-family: 'Times New Roman', serif;
+    }
+    .box-info  { background: #eff6ff; border-left: 4px solid #3b82f6; color: #1e3a8a; }
+    .box-warn  { background: #fffbeb; border-left: 4px solid #d97706; color: #78350f; }
+    .box-tip   { background: #f0fdf4; border-left: 4px solid #16a34a; color: #14532d; }
+    .box-error { background: #fef2f2; border-left: 4px solid #dc2626; color: #7f1d1d; }
+    .box strong { font-weight: bold; }
+
+    /* ── Tables ── */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0;
+      font-size: 12pt;
+      font-family: 'Times New Roman', serif;
+    }
+    th {
+      background: #f3f4f6;
+      font-weight: bold;
+      font-family: Arial, sans-serif;
+      text-align: left;
+      padding: 9px 13px;
+      border: 1px solid #d1d5db;
+      color: #111;
+      font-size: 11pt;
+    }
+    td {
+      padding: 8px 13px;
+      border: 1px solid #e5e7eb;
+      color: #222;
+      vertical-align: top;
+    }
+    tr:nth-child(even) td { background: #f9fafb; }
+    td code { font-size: 11pt; }
+
+    /* ── File Tree ── */
+    .tree {
+      background: #f9fafb;
+      border: 1px solid #d1d5db;
+      border-radius: 3px;
+      padding: 14px 20px;
+      font-family: 'Consolas', monospace;
+      font-size: 11pt;
+      line-height: 2;
+      color: #222;
+      margin: 12px 0;
+    }
+    .tree .dir  { color: #1d4ed8; font-weight: bold; }
+    .tree .file { color: #374151; }
+    .tree .desc { color: #6b7280; font-style: italic; font-size: 10.5pt; }
+
+    /* ── Terminal Output ── */
+    .terminal {
+      background: #0f172a;
+      border-radius: 10px;
+      overflow: hidden;
+      margin: 12px 0 18px;
+    }
+    .terminal-bar {
+      background: #1e293b;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .terminal-bar .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+    }
+    .terminal-bar .title {
+      font-size: 10pt;
+      color: #64748b;
+      margin-left: 6px;
+      font-family: 'Consolas', monospace;
+    }
+    .terminal-body {
+      padding: 13px 18px;
+      font-family: 'Consolas', monospace;
+      font-size: 11pt;
+      line-height: 1.8;
+      color: #cbd5e1;
+    }
+    .t-green  { color: #4ade80; }
+    .t-blue   { color: #60a5fa; }
+    .t-yellow { color: #fbbf24; }
+    .t-red    { color: #f87171; }
+    .t-gray   { color: #64748b; }
+
+    /* ── Architecture Diagram ── */
+    .arch {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      margin: 24px 0;
+      flex-wrap: wrap;
+    }
+    .arch-box {
+      background: #f8fafc;
+      border: 2px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 14px 20px;
+      text-align: center;
+      min-width: 110px;
+    }
+    .arch-box.blue  { background: #eff6ff; border-color: #93c5fd; }
+    .arch-box.green { background: #f0fdf4; border-color: #86efac; }
+    .arch-box.red   { background: #fef2f2; border-color: #fca5a5; }
+    .arch-box .icon { font-size: 22px; margin-bottom: 4px; }
+    .arch-box .name { font-size: 11px; font-weight: 700; color: #1e293b; }
+    .arch-box .sub  { font-size: 10px; color: #94a3b8; }
+    .arch-arrow {
+      font-size: 20px;
+      color: #94a3b8;
+      padding: 0 6px;
+    }
+    .arch-arrow.down { transform: rotate(90deg); }
+
+    /* ── Checklist ── */
+    .checklist { list-style: none; margin: 10px 0 16px; }
+    .checklist li {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 5px 0;
+      color: #222;
+      font-size: 12pt;
+      font-family: 'Times New Roman', serif;
+    }
+    .checklist li::before {
+      content: '✓';
+      color: #16a34a;
+      font-weight: bold;
+      font-size: 12pt;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+
+    /* ── Footer ── */
+    .footer {
+      text-align: center;
+      padding: 24px;
+      border-top: 1px solid #d1d5db;
+      margin-top: 36px;
+      color: #6b7280;
+      font-size: 10pt;
+      font-family: Arial, sans-serif;
+    }
+
+    /* ── Print ── */
+    @media print {
+      body { font-size: 13pt; }
+      .page { padding: 40px 60px; }
+      pre { font-size: 11pt; }
+      .cover { min-height: 100vh; }
+      @page { margin: 15mm 18mm; size: A4; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════════════════════
+     COVER PAGE
+══════════════════════════════════════════════════════ -->
+<div class="cover">
+  <div class="badge">Big Data Assignment</div>
+  <h1>Kafka Order<br><span>System Guide</span></h1>
+  <p class="subtitle">
+    A complete setup and run guide for the Kafka-based order messaging
+    system with Avro serialization, real-time aggregation, retry logic,
+    and Dead Letter Queue.
+  </p>
+  <div class="cover-pills">
+    <span>Apache Kafka</span>
+    <span>Avro Serialization</span>
+    <span>Running Average</span>
+    <span>Retry Logic</span>
+    <span>Dead Letter Queue</span>
+    <span>Real-time Dashboard</span>
+  </div>
+  <div class="cover-meta">
+    <div>
+      <div class="label">Language</div>
+      <div class="value">Python 3.8+</div>
+    </div>
+    <div>
+      <div class="label">Infrastructure</div>
+      <div class="value">Docker Desktop</div>
+    </div>
+    <div>
+      <div class="label">Kafka Mode</div>
+      <div class="value">KRaft (no Zookeeper)</div>
+    </div>
+    <div>
+      <div class="label">Repository</div>
+      <div class="value">GitHub</div>
+    </div>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     PAGE 1 — Overview & Architecture
+══════════════════════════════════════════════════════ -->
+<div class="page">
+  <div class="section-label">Section 1</div>
+  <h2>System Overview</h2>
+
+  <p>
+    This system simulates a real-time order processing pipeline using Apache Kafka.
+    Orders are produced, serialized with <strong>Apache Avro</strong>, consumed,
+    validated, and aggregated — with full retry and dead letter queue support.
+  </p>
+
+  <h3>Architecture</h3>
+  <div class="arch">
+    <div class="arch-box blue">
+      <div class="icon">⚙️</div>
+      <div class="name">Producer</div>
+      <div class="sub">producer.py</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box">
+      <div class="icon">📨</div>
+      <div class="name">Kafka Broker</div>
+      <div class="sub">topic: orders</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box green">
+      <div class="icon">🖥️</div>
+      <div class="name">Consumer</div>
+      <div class="sub">app.py / consumer.py</div>
+    </div>
+    <div class="arch-arrow">→</div>
+    <div class="arch-box red">
+      <div class="icon">💀</div>
+      <div class="name">DLQ</div>
+      <div class="sub">topic: orders.dlq</div>
+    </div>
+  </div>
+
+  <h3>Assignment Requirements Mapping</h3>
+  <table>
+    <thead>
+      <tr><th>Requirement</th><th>Implementation</th><th>File</th></tr>
+    </thead>
+    <tbody>
+      <tr><td>Order message with orderId, product, price</td><td>Avro schema definition</td><td><code>order.avsc</code></td></tr>
+      <tr><td>Avro serialization</td><td>fastavro schemaless read/write</td><td><code>producer.py</code>, <code>consumer.py</code></td></tr>
+      <tr><td>Real-time aggregation (running average)</td><td>Incremental avg updated per message</td><td><code>consumer.py</code>, <code>app.py</code></td></tr>
+      <tr><td>Retry logic for temporary failures</td><td>3 retries with exponential back-off (2s→4s→8s)</td><td><code>consumer.py</code>, <code>app.py</code></td></tr>
+      <tr><td>Dead Letter Queue</td><td>Failed messages forwarded to <code>orders.dlq</code></td><td><code>consumer.py</code>, <code>app.py</code></td></tr>
+      <tr><td>Git repository</td><td>Full source committed and pushed</td><td>GitHub</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Project File Structure</h3>
+  <div class="tree">
+    <span class="dir">kafka-avro-order-system/</span><br>
+    &nbsp;&nbsp;├── <span class="file">docker-compose.yml</span>&nbsp;&nbsp;&nbsp;<span class="desc">Kafka broker (single container, KRaft mode)</span><br>
+    &nbsp;&nbsp;├── <span class="file">order.avsc</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="desc">Avro schema — orderId, product, price</span><br>
+    &nbsp;&nbsp;├── <span class="file">producer.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="desc">Sends 1 order/sec (Avro-serialized)</span><br>
+    &nbsp;&nbsp;├── <span class="file">consumer.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="desc">CLI consumer with retry, avg, DLQ</span><br>
+    &nbsp;&nbsp;├── <span class="file">app.py</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="desc">Flask dashboard + SocketIO server</span><br>
+    &nbsp;&nbsp;├── <span class="file">templates/index.html</span>&nbsp;<span class="desc">Real-time browser dashboard</span><br>
+    &nbsp;&nbsp;├── <span class="file">requirements.txt</span>&nbsp;&nbsp;&nbsp;&nbsp;<span class="desc">Python dependencies</span><br>
+    &nbsp;&nbsp;└── <span class="file">README.md</span>&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="desc">Project documentation</span>
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     PAGE 2 — Prerequisites & Installation
+══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-label">Section 2</div>
+  <h2>Prerequisites &amp; Installation</h2>
+
+  <h3 class="step"><span class="num">1</span>Install Docker Desktop</h3>
+  <p>Docker Desktop runs Apache Kafka as a container — no manual Kafka installation needed.</p>
+
+  <div class="box box-info">
+    <strong>Download:</strong> Visit <strong>https://www.docker.com/products/docker-desktop</strong>,
+    download the Windows installer, and run it. Restart your computer when prompted.
+  </div>
+
+  <p>After installation, open <strong>Docker Desktop</strong> from the Start menu and wait until it shows <em>"Docker Desktop is running"</em> in the system tray.</p>
+
+  <p><strong>Verify Docker is working:</strong></p>
+  <pre><span class="cmd">docker --version</span>
+<span class="comment"># Expected output: Docker version 24.x.x, ...</span></pre>
+
+  <h3 class="step"><span class="num">2</span>Install Python 3.8+</h3>
+  <p>Python is required to run the producer and consumer scripts.</p>
+
+  <div class="box box-info">
+    <strong>Download:</strong> Visit <strong>https://www.python.org/downloads/</strong> and
+    download the latest Python 3.x installer. During installation, check
+    <em>"Add Python to PATH"</em>.
+  </div>
+
+  <p><strong>Verify Python is working:</strong></p>
+  <pre><span class="cmd">python --version</span>
+<span class="comment"># Expected output: Python 3.x.x</span></pre>
+
+  <h3 class="step"><span class="num">3</span>Install Python Dependencies</h3>
+  <p>Open PowerShell, navigate to the project folder, and run:</p>
+  <pre><span class="cmd">cd "C:\Users\Admin\Desktop\Big data takehome"</span>
+<span class="cmd">pip install -r requirements.txt</span></pre>
+
+  <p>This installs the following packages:</p>
+  <table>
+    <thead><tr><th>Package</th><th>Version</th><th>Purpose</th></tr></thead>
+    <tbody>
+      <tr><td><code>confluent-kafka</code></td><td>2.3.0</td><td>Kafka producer and consumer client</td></tr>
+      <tr><td><code>fastavro</code></td><td>1.9.4</td><td>Avro serialization and deserialization</td></tr>
+      <tr><td><code>flask</code></td><td>3.0.3</td><td>Web server for the dashboard</td></tr>
+      <tr><td><code>flask-socketio</code></td><td>5.3.6</td><td>Real-time WebSocket communication</td></tr>
+    </tbody>
+  </table>
+
+  <div class="box box-tip">
+    <strong>Tip:</strong> If you get a permissions error, try running PowerShell as Administrator,
+    or add <code>--user</code> to the pip command.
+  </div>
+
+  <h3 class="step"><span class="num">4</span>Clone or Open the Project</h3>
+  <p>The project is hosted on GitHub. If you need to re-download it:</p>
+  <pre><span class="cmd">git clone https://github.com/Lasindumadu/kafka-avro-order-system.git</span>
+<span class="cmd">cd kafka-avro-order-system</span></pre>
+
+  <p>Or simply navigate to the existing project folder:</p>
+  <pre><span class="cmd">cd "C:\Users\Admin\Desktop\Big data takehome"</span></pre>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     PAGE 3 — Running the System
+══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-label">Section 3</div>
+  <h2>Running the System</h2>
+
+  <div class="box box-warn">
+    <strong>Important:</strong> Always start Kafka first (Step 1) and wait ~15 seconds before running
+    the producer or consumer. Kafka must be fully ready to accept connections.
+  </div>
+
+  <h3 class="step"><span class="num">1</span>Start Kafka (Terminal 1)</h3>
+  <p>Open PowerShell in the project folder and run:</p>
+  <pre><span class="cmd">docker-compose up -d</span></pre>
+
+  <p>Expected output:</p>
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <div class="title">PowerShell — Terminal 1</div>
+    </div>
+    <div class="terminal-body">
+      [+] Running 2/2<br>
+      &nbsp;<span class="t-green">✔</span> Network kafka-avro-order-system_default &nbsp;Created<br>
+      &nbsp;<span class="t-green">✔</span> Container kafka &nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Started
+    </div>
+  </div>
+
+  <p>Verify Kafka is running:</p>
+  <pre><span class="cmd">docker-compose ps</span>
+<span class="comment"># Should show: kafka   Up</span></pre>
+
+  <div class="box box-tip">
+    <strong>Wait 15 seconds</strong> after this step before proceeding. Kafka needs time to
+    fully initialize its internal topics and become ready for connections.
+  </div>
+
+  <h3 class="step"><span class="num">2</span>Start the Dashboard (Terminal 2)</h3>
+  <p>Open a <strong>new</strong> PowerShell window in the project folder and run:</p>
+  <pre><span class="cmd">python app.py</span></pre>
+
+  <p>Expected output:</p>
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <div class="title">PowerShell — Terminal 2 (Dashboard)</div>
+    </div>
+    <div class="terminal-body">
+      [Dashboard] <span class="t-blue">http://localhost:5000</span>
+    </div>
+  </div>
+
+  <p>Open your browser and navigate to <strong>http://localhost:5000</strong> to view the live dashboard.</p>
+
+  <h3 class="step"><span class="num">3</span>Start the Producer (Terminal 3)</h3>
+  <p>Open a <strong>third</strong> PowerShell window in the project folder and run:</p>
+  <pre><span class="cmd">python producer.py</span></pre>
+
+  <p>Expected output:</p>
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <div class="title">PowerShell — Terminal 3 (Producer)</div>
+    </div>
+    <div class="terminal-body">
+      [Producer] Publishing to 'orders'. Press Ctrl+C to stop.<br><br>
+      [Producer] Sent → orderId=<span class="t-blue">1000</span>, product=<span class="t-green">Item3</span>, price=<span class="t-yellow">$243.50</span><br>
+      [Producer] Sent → orderId=<span class="t-blue">1001</span>, product=<span class="t-green">Item1</span>, price=<span class="t-yellow">$87.20</span><br>
+      [Producer] Sent → orderId=<span class="t-blue">1002</span>, product=<span class="t-green">Item4</span>, price=<span class="t-yellow">$0.00</span> <span class="t-red">[INVALID]</span><br>
+      [Producer] Sent → orderId=<span class="t-blue">1003</span>, product=<span class="t-green">Item2</span>, price=<span class="t-yellow">$341.00</span>
+    </div>
+  </div>
+
+  <div class="box box-info">
+    <strong>Note:</strong> The producer sends one order per second. Approximately 5% of orders
+    are intentionally invalid (price = $0.00) to demonstrate the retry and DLQ flow.
+    These are marked <strong>[INVALID]</strong> in the producer output.
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     PAGE 4 — Dashboard & Consumer Behavior
+══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-label">Section 4</div>
+  <h2>Dashboard &amp; Consumer Behavior</h2>
+
+  <h3>Browser Dashboard (http://localhost:5000)</h3>
+  <p>The dashboard updates in real time via WebSocket. It displays six panels:</p>
+
+  <table>
+    <thead><tr><th>Panel</th><th>What it Shows</th></tr></thead>
+    <tbody>
+      <tr><td><strong>Orders</strong> (stat card)</td><td>Total number of successfully processed orders</td></tr>
+      <tr><td><strong>Avg Price</strong> (stat card)</td><td>Live running average of all valid order prices</td></tr>
+      <tr><td><strong>Min / Max</strong> (stat cards)</td><td>Lowest and highest prices seen in this session</td></tr>
+      <tr><td><strong>Retries</strong> (stat card)</td><td>Total retry attempts triggered so far</td></tr>
+      <tr><td><strong>DLQ</strong> (stat card)</td><td>Total messages forwarded to the Dead Letter Queue</td></tr>
+      <tr><td><strong>Running Avg Chart</strong></td><td>Line chart — blue = running average, yellow dashed = individual prices</td></tr>
+      <tr><td><strong>Orders by Product</strong></td><td>Doughnut chart showing distribution across Item1–Item5</td></tr>
+      <tr><td><strong>Recent Orders</strong></td><td>Scrollable table of the last 12 orders with price and running avg</td></tr>
+      <tr><td><strong>Event Log</strong></td><td>Live log of OK, Retry, and DLQ events with color coding</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Consumer Terminal Output (consumer.py)</h3>
+  <p>If running the CLI consumer instead of the dashboard, you will see:</p>
+  <div class="terminal">
+    <div class="terminal-bar">
+      <div class="dot" style="background:#ff5f57"></div>
+      <div class="dot" style="background:#febc2e"></div>
+      <div class="dot" style="background:#28c840"></div>
+      <div class="title">PowerShell — consumer.py output</div>
+    </div>
+    <div class="terminal-body">
+      <span class="t-gray">[Consumer] Subscribed to 'orders'. Press Ctrl+C to stop.</span><br><br>
+      [Consumer] <span class="t-green">OK</span>  orderId= <span class="t-blue">1000</span> | product=<span class="t-green">Item3 </span> | price=<span class="t-yellow">$243.50</span> | running avg=<span class="t-blue">$243.50</span> | count=1<br>
+      [Consumer] <span class="t-green">OK</span>  orderId= <span class="t-blue">1001</span> | product=<span class="t-green">Item1 </span> | price=<span class="t-yellow">$ 87.20</span> | running avg=<span class="t-blue">$165.35</span> | count=2<br>
+      &nbsp;&nbsp;[Retry <span class="t-yellow">1/3</span>] Invalid price 0.0 — order 1002 — waiting <span class="t-yellow">2s</span>...<br>
+      &nbsp;&nbsp;[Retry <span class="t-yellow">2/3</span>] Invalid price 0.0 — order 1002 — waiting <span class="t-yellow">4s</span>...<br>
+      &nbsp;&nbsp;[Retry <span class="t-yellow">3/3</span>] Invalid price 0.0 — order 1002 — waiting <span class="t-yellow">8s</span>...<br>
+      &nbsp;&nbsp;<span class="t-red">[DLQ]</span> Forwarded to 'orders.dlq' — reason: Exhausted 3 retries<br>
+      [Consumer] <span class="t-green">OK</span>  orderId= <span class="t-blue">1003</span> | product=<span class="t-green">Item2 </span> | price=<span class="t-yellow">$341.00</span> | running avg=<span class="t-blue">$223.90</span> | count=3
+    </div>
+  </div>
+
+  <h3>Retry Logic Explained</h3>
+  <p>When a message fails validation or hits a transient processing error:</p>
+  <table>
+    <thead><tr><th>Attempt</th><th>Wait Before Retry</th><th>Formula</th></tr></thead>
+    <tbody>
+      <tr><td>Retry 1</td><td>2 seconds</td><td>2 × 2⁰ = 2s</td></tr>
+      <tr><td>Retry 2</td><td>4 seconds</td><td>2 × 2¹ = 4s</td></tr>
+      <tr><td>Retry 3</td><td>8 seconds</td><td>2 × 2² = 8s</td></tr>
+      <tr><td>After Retry 3</td><td>—</td><td>Message forwarded to DLQ</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Dead Letter Queue (DLQ) — Two Paths</h3>
+  <table>
+    <thead><tr><th>Trigger</th><th>Path</th><th>Topic</th></tr></thead>
+    <tbody>
+      <tr>
+        <td>Order with <code>price = 0.0</code></td>
+        <td>Retry 1 → Retry 2 → Retry 3 → DLQ</td>
+        <td><code>orders.dlq</code></td>
+      </tr>
+      <tr>
+        <td>Transient processing error (15% rate)</td>
+        <td>Retry until exhausted → DLQ</td>
+        <td><code>orders.dlq</code></td>
+      </tr>
+      <tr>
+        <td>Non-retryable (e.g. bad Avro bytes)</td>
+        <td>Straight to DLQ (no retries)</td>
+        <td><code>orders.dlq</code></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="box box-tip">
+    <strong>DLQ messages include metadata.</strong> Each message forwarded to <code>orders.dlq</code>
+    carries a Kafka header named <code>failure_reason</code> explaining why it failed.
+  </div>
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════
+     PAGE 5 — Demo Script & Shutdown
+══════════════════════════════════════════════════════ -->
+<div class="page page-break">
+  <div class="section-label">Section 5</div>
+  <h2>Live Demo Script</h2>
+
+  <p>Follow this sequence when demonstrating the system to your assessor:</p>
+
+  <h3 class="step"><span class="num">1</span>Start Kafka</h3>
+  <pre><span class="cmd">docker-compose up -d</span></pre>
+  <p>Show that a single Docker container is running Kafka in KRaft mode (no Zookeeper needed).</p>
+
+  <h3 class="step"><span class="num">2</span>Start the Dashboard</h3>
+  <pre><span class="cmd">python app.py</span></pre>
+  <p>Open <strong>http://localhost:5000</strong> in your browser. Show the empty dashboard waiting for data.</p>
+
+  <h3 class="step"><span class="num">3</span>Start the Producer</h3>
+  <pre><span class="cmd">python producer.py</span></pre>
+  <p>Switch to the browser. Point out:</p>
+  <ul style="margin: 8px 0 14px 24px; color: #222; font-size: 12pt; font-family: 'Times New Roman', serif; line-height: 1.9;">
+    <li>The <strong>Orders counter</strong> incrementing every second</li>
+    <li>The <strong>Running Average</strong> updating live in the stat card and chart</li>
+    <li>The <strong>Product donut chart</strong> showing distribution growing</li>
+    <li>The <strong>Event Log</strong> showing green OK entries per order</li>
+  </ul>
+
+  <h3 class="step"><span class="num">4</span>Show Retry Logic</h3>
+  <p>Wait for a yellow <strong>Retry</strong> entry to appear in the Event Log (happens when the simulated
+  downstream service is temporarily unavailable — 15% chance per message). Point out:</p>
+  <ul style="margin: 8px 0 14px 24px; color: #222; font-size: 12pt; font-family: 'Times New Roman', serif; line-height: 1.9;">
+    <li>Retry attempt number and max (e.g. Retry 1/3)</li>
+    <li>The error reason</li>
+    <li>The <strong>Retries counter</strong> incrementing</li>
+  </ul>
+
+  <h3 class="step"><span class="num">5</span>Show Dead Letter Queue</h3>
+  <p>Wait for a red <strong>DLQ</strong> entry in the Event Log (triggered by invalid price=0 orders
+  that exhaust all retries, or by transient errors that never recover). Point out:</p>
+  <ul style="margin: 8px 0 14px 24px; color: #222; font-size: 12pt; font-family: 'Times New Roman', serif; line-height: 1.9;">
+    <li>The <strong>DLQ counter</strong> incrementing</li>
+    <li>The failure reason shown in the log</li>
+    <li>That the message is forwarded to the <code>orders.dlq</code> Kafka topic</li>
+  </ul>
+
+  <h3 class="step"><span class="num">6</span>Show Avro Schema</h3>
+  <p>Open <code>order.avsc</code> and show the schema definition:</p>
+  <pre>{
+  <span class="str">"type"</span>: <span class="str">"record"</span>,
+  <span class="str">"name"</span>: <span class="str">"Order"</span>,
+  <span class="str">"namespace"</span>: <span class="str">"com.assignment.orders"</span>,
+  <span class="str">"fields"</span>: [
+    { <span class="str">"name"</span>: <span class="str">"orderId"</span>, <span class="str">"type"</span>: <span class="str">"string"</span> },
+    { <span class="str">"name"</span>: <span class="str">"product"</span>, <span class="str">"type"</span>: <span class="str">"string"</span> },
+    { <span class="str">"name"</span>: <span class="str">"price"</span>,   <span class="str">"type"</span>: <span class="str">"float"</span>  }
+  ]
+}</pre>
+
+  <h3 class="step"><span class="num">7</span>Show Git Repository</h3>
+  <p>Open <strong>https://github.com/Lasindumadu/kafka-avro-order-system</strong> in your browser
+  and show all committed files.</p>
+
+  <div style="margin-top: 30px; padding-top: 24px; border-top: 1px solid #e2e8f0;">
+    <div class="section-label">Shutdown</div>
+    <h2 style="margin-top: 4px;">Stopping the System</h2>
+
+    <p>Stop the producer and consumer by pressing <strong>Ctrl+C</strong> in their respective terminals.</p>
+    <p>Then stop and remove the Kafka container:</p>
+    <pre><span class="comment"># Stop containers (keeps data)</span>
+<span class="cmd">docker-compose down</span>
+
+<span class="comment"># Stop AND delete all Kafka data (clean slate for next run)</span>
+<span class="cmd">docker-compose down -v</span></pre>
+
+    <div class="box box-warn">
+      <strong>Note:</strong> Using <code>docker-compose down -v</code> deletes all Kafka topic data.
+      The next time you start, the consumer will read from offset 0 again.
+      Use <code>docker-compose down</code> (without <code>-v</code>) to preserve data between runs.
+    </div>
+  </div>
+
+  <ul class="checklist" style="margin-top: 24px;">
+    <li>Kafka starts with a single Docker container (no Zookeeper)</li>
+    <li>Producer serializes every message using Apache Avro</li>
+    <li>Consumer deserializes and validates each message</li>
+    <li>Running average updates after every successful order</li>
+    <li>Retry logic fires with exponential back-off (2s → 4s → 8s)</li>
+    <li>Failed messages are forwarded to the DLQ with a failure reason header</li>
+    <li>Real-time dashboard reflects all events via WebSocket</li>
+  </ul>
+
+  <div class="footer">
+    Kafka Avro Order System &nbsp;·&nbsp; Python + Apache Kafka + Docker &nbsp;·&nbsp;
+    github.com/Lasindumadu/kafka-avro-order-system
+  </div>
+</div>
+
+</body>
+</html>

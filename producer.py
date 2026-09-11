@@ -1,7 +1,7 @@
 """
 Kafka Order Producer
 - 95% normal orders with randomized prices
-- 5% intentionally invalid orders (price=0) to exercise retry/DLQ path
+- 20% intentionally invalid orders (price=0) to exercise retry/DLQ path
 """
 
 import io
@@ -38,8 +38,8 @@ def delivery_report(err, msg):
 
 
 def make_order(order_id: int) -> dict:
-    # 5% chance of an invalid order (price=0) to demonstrate retry + DLQ
-    if random.random() < 0.05:
+    # 20% chance of an invalid order (price=0) to demonstrate retry + DLQ
+    if random.random() < 0.20:
         return {"orderId": str(order_id), "product": random.choice(PRODUCTS), "price": 0.0}
     return {
         "orderId": str(order_id),

@@ -18,7 +18,7 @@ TOPIC        = "orders"
 DLQ_TOPIC    = "orders.dlq"
 GROUP_ID     = "order-dashboard-group"
 MAX_RETRIES  = 3
-BASE_BACKOFF = 2
+BASE_BACKOFF = 1  # retries at 1s → 2s → 4s = 7s total, snappy for demo
 
 app      = Flask(__name__)
 socketio = SocketIO(app, cors_allowed_origins="*", async_mode="threading")
@@ -56,7 +56,7 @@ def simulate_processing(order: dict):
         raise RuntimeError("Transient processing error (downstream service unavailable)")
 
 
-def send_to_dlq(dlq_producer: Producer, raw: bytes, reason: str):
+def send_to_dlq(dlq_producer: Producer, raw: bytes, reason: str, order_id: str = "?"):
     dlq_producer.produce(
         topic=DLQ_TOPIC,
         value=raw,
@@ -66,7 +66,7 @@ def send_to_dlq(dlq_producer: Producer, raw: bytes, reason: str):
     with stats_lock:
         stats["dlq_count"] += 1
         count = stats["dlq_count"]
-    socketio.emit("dlq_event", {"reason": reason, "count": count})
+    socketio.emit("dlq_event", {"reason": reason, "count": count, "orderId": order_id})
 
 
 def consume_loop():
@@ -89,12 +89,15 @@ def consume_loop():
                     continue
                 break
 
-            raw     = msg.value()
-            success = False
+            raw        = msg.value()
+            success    = False
+            order_id   = "?"
+            retries_used = 0
 
             for attempt in range(1, MAX_RETRIES + 1):
                 try:
-                    order = deserialize(raw)
+                    order    = deserialize(raw)
+                    order_id = order["orderId"]
                     validate(order)
                     simulate_processing(order)
 
@@ -105,44 +108,47 @@ def consume_loop():
                             stats["min_price"] = order["price"]
                         if stats["max_price"] is None or order["price"] > stats["max_price"]:
                             stats["max_price"] = order["price"]
-                        avg       = stats["total"] / stats["count"]
-                        snap      = dict(stats)
+                        avg  = stats["total"] / stats["count"]
+                        snap = dict(stats)
 
                     socketio.emit("new_order", {
-                        "orderId":  order["orderId"],
-                        "product":  order["product"],
-                        "price":    round(order["price"], 2),
-                        "avg":      round(avg, 2),
-                        "count":    snap["count"],
-                        "min":      round(snap["min_price"], 2),
-                        "max":      round(snap["max_price"], 2),
-                        "dlq_count":   snap["dlq_count"],
-                        "retry_count": snap["retry_count"],
+                        "orderId":      order["orderId"],
+                        "product":      order["product"],
+                        "price":        round(order["price"], 2),
+                        "avg":          round(avg, 2),
+                        "count":        snap["count"],
+                        "min":          round(snap["min_price"], 2),
+                        "max":          round(snap["max_price"], 2),
+                        "dlq_count":    snap["dlq_count"],
+                        "retry_count":  snap["retry_count"],
+                        "retries_used": retries_used,
                     })
                     success = True
                     break
 
                 except (ValueError, RuntimeError) as e:
+                    retries_used += 1
                     wait = BASE_BACKOFF * (2 ** (attempt - 1))
                     with stats_lock:
                         stats["retry_count"] += 1
                         retry_count = stats["retry_count"]
                     socketio.emit("retry_event", {
-                        "attempt": attempt,
-                        "max":     MAX_RETRIES,
-                        "reason":  str(e),
-                        "wait":    wait,
-                        "total":   retry_count,
+                        "attempt":  attempt,
+                        "max":      MAX_RETRIES,
+                        "reason":   str(e),
+                        "wait":     wait,
+                        "total":    retry_count,
+                        "orderId":  order_id,
                     })
                     time.sleep(wait)
 
                 except Exception as e:
-                    send_to_dlq(dlq_producer, raw, str(e))
+                    send_to_dlq(dlq_producer, raw, str(e), order_id)
                     success = True
                     break
 
             if not success:
-                send_to_dlq(dlq_producer, raw, f"Exhausted {MAX_RETRIES} retries")
+                send_to_dlq(dlq_producer, raw, f"Exhausted {MAX_RETRIES} retries", order_id)
 
             consumer.commit(msg)
     finally:

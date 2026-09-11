@@ -17,7 +17,7 @@ TOPIC         = "orders"
 DLQ_TOPIC     = "orders.dlq"
 GROUP_ID      = "order-consumer-group"
 MAX_RETRIES   = 3
-BASE_BACKOFF  = 2
+BASE_BACKOFF  = 1  # retries at 1s → 2s → 4s = 7s total
 
 AVRO_SCHEMA = fastavro.parse_schema({
     "type": "record",
